@@ -1,0 +1,1639 @@
+AIO Sale Card_Display_Month	
+VAR SalesValue = [AIO Sale Current Month MTD]
+VAR LastMonthValue = [AIO Sale Last Month]
+VAR MoM = [AIO Sale MoM % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(MoM),
+        "",
+        IF (MoM >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"CM ₹ " & FORMAT(SalesValue, "#,##,##,##,###") &
+" | LM ₹ " & FORMAT(LastMonthValue, "#,##,##,##,###") &
+UNICHAR(10) &
+IF (
+    ISBLANK(MoM),
+    "vs LM NA",
+    "vs LM " & FORMAT(MoM, "0.0%") & Arrow
+)
+------------------------------------------------------------------
+AIO Sale Card_Display_Quarter	
+VAR SalesValue = [AIO Sale Current Quarter QTD]
+VAR LastQuarterValue = [AIO Sale Last Quarter]
+VAR QoQ = [AIO Sale QoQ % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(QoQ),
+        "",
+        IF (QoQ >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"CQ ₹ " & FORMAT(SalesValue, "#,##,##,##,###") &
+" | LQ ₹ " & FORMAT(LastQuarterValue, "#,##,##,##,###") &
+UNICHAR(10) &
+IF (
+    ISBLANK(QoQ),
+    "vs LQ NA",
+    "vs LQ " & FORMAT(QoQ, "0.0%") & Arrow
+)
+------------------------------------------------------------------
+
+AIO Sale Card_Display_Week	
+VAR SalesValue = [AIO Sale Current Week]
+VAR LastWeekValue = [AIO Sale Last Week]
+VAR WoW = [AIO Sale WoW % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(WoW),
+        "",
+        IF (WoW >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"CW ₹" & FORMAT(SalesValue, "#,##0") &
+" | LW ₹" & FORMAT(LastWeekValue, "#,##0") &
+UNICHAR(10) &
+IF (
+    ISBLANK(WoW),
+    "vs LW NA",
+    "vs LW " & FORMAT(WoW, "0.0%") & Arrow
+)
+------------------------------------------------------------------
+
+AIO Sale Card_Display_Year	
+VAR SalesValue = [AIO Sale Current Year YTD]
+VAR LastYearValue = [AIO Sale Last Year]
+VAR YoY = [AIO Sale YoY % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(YoY),
+        "",
+        IF (YoY >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"FY ₹ " & FORMAT(SalesValue, "#,##,##,##,###") &
+" | LY ₹ " & FORMAT(LastYearValue, "#,##,##,##,###") &
+UNICHAR(10) &
+IF (
+    ISBLANK(YoY),
+    "vs LY NA",
+    "vs LY " & FORMAT(YoY, "0.0%") & Arrow
+)
+------------------------------------------------------------------
+
+AIO Sale Current Month MTD	
+VAR TodayDate = TODAY()
+
+VAR MonthStart =
+    DATE(YEAR(TodayDate), MONTH(TodayDate), 1)
+
+RETURN
+CALCULATE(
+    [Total_Sales_All_Platforms],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= MonthStart,
+    'Calendar_Table'[Date] <= TodayDate
+)
+------------------------------------------------------------------
+
+AIO Sale Current Quarter QTD	
+VAR TodayDate = TODAY()
+
+-- FY Month (Apr = 1)
+VAR FYMonth =
+    MOD(MONTH(TodayDate) + 8, 12) + 1
+
+-- FY Quarter
+VAR FYQuarter =
+    INT((FYMonth - 1) / 3) + 1
+
+-- Quarter Start Month (Actual month)
+VAR QuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        FYQuarter = 1, 4,
+        FYQuarter = 2, 7,
+        FYQuarter = 3, 10,
+        1
+    )
+
+-- Year adjust (Jan–Mar belongs to next calendar year)
+VAR QuarterYear =
+    IF(QuarterStartMonth = 1, YEAR(TodayDate) + 1, YEAR(TodayDate))
+
+VAR QuarterStart =
+    DATE(QuarterYear, QuarterStartMonth, 1)
+
+RETURN
+CALCULATE(
+    [Total_Sales_All_Platforms],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= QuarterStart,
+    'Calendar_Table'[Date] <= TodayDate
+)
+------------------------------------------------------------------
+
+AIO Sale Current Week	
+VAR LasDate =
+    MAXX(ALL('Calendar_Table'), 'Calendar_Table'[Date])
+
+VAR WeekStart =
+    LasDate - WEEKDAY(LasDate,2) + 1
+
+RETURN
+CALCULATE(
+    [Total_Sales_All_Platforms],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= WeekStart,
+    'Calendar_Table'[Date] <= LasDate
+)
+------------------------------------------------------------------
+
+AIO Sale Current Year YTD	
+VAR TodayDate = TODAY()
+
+VAR FYStart =
+    DATE(
+        IF(MONTH(TodayDate) >= 4, YEAR(TodayDate), YEAR(TodayDate) - 1),
+        4, 1
+    )
+
+RETURN
+CALCULATE(
+    [Total_Sales_All_Platforms],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= FYStart,
+    'Calendar_Table'[Date] <= TodayDate
+)
+------------------------------------------------------------------
+
+AIO Sale Last Month	
+VAR TodayDate = TODAY()
+
+VAR PrevMonthDate =
+    EDATE(TodayDate, -1)
+
+VAR LastMonthStart =
+    DATE(YEAR(PrevMonthDate), MONTH(PrevMonthDate), 1)
+
+VAR LastMonthEnd =
+    EOMONTH(PrevMonthDate, 0)
+
+VAR LastMonthSameDate =
+    MIN(
+        DATE(YEAR(PrevMonthDate), MONTH(PrevMonthDate), DAY(TodayDate)),
+        LastMonthEnd
+    )
+
+RETURN
+CALCULATE(
+    [Total_Sales_All_Platforms],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= LastMonthStart,
+    'Calendar_Table'[Date] <= LastMonthSameDate
+)
+------------------------------------------------------------------
+
+AIO Sale Last Quarter	
+VAR TodayDate = TODAY()
+
+-- Current FY Month & Quarter
+VAR FYMonth =
+    MOD(MONTH(TodayDate) + 8, 12) + 1
+
+VAR FYQuarter =
+    INT((FYMonth - 1) / 3) + 1
+
+-- Current Quarter Start
+VAR CurrQuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        FYQuarter = 1, 4,
+        FYQuarter = 2, 7,
+        FYQuarter = 3, 10,
+        1
+    )
+
+VAR CurrQuarterYear =
+    IF(CurrQuarterStartMonth = 1, YEAR(TodayDate) + 1, YEAR(TodayDate))
+
+VAR CurrQuarterStart =
+    DATE(CurrQuarterYear, CurrQuarterStartMonth, 1)
+
+-- Previous Quarter
+VAR PrevQuarter =
+    IF(FYQuarter > 1, FYQuarter - 1, 4)
+
+VAR PrevQuarterFY =
+    IF(FYQuarter > 1, YEAR(TodayDate), YEAR(TodayDate) - 1)
+
+VAR PrevQuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        PrevQuarter = 1, 4,
+        PrevQuarter = 2, 7,
+        PrevQuarter = 3, 10,
+        1
+    )
+
+VAR PrevQuarterYear =
+    IF(PrevQuarterStartMonth = 1, PrevQuarterFY + 1, PrevQuarterFY)
+
+VAR PrevQuarterStart =
+    DATE(PrevQuarterYear, PrevQuarterStartMonth, 1)
+
+-- Same period logic
+VAR DaysPassed =
+    TodayDate - CurrQuarterStart
+
+VAR PrevQuarterSameDate =
+    PrevQuarterStart + DaysPassed
+
+RETURN
+CALCULATE(
+    [Total_Sales_All_Platforms],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= PrevQuarterStart,
+    'Calendar_Table'[Date] <= PrevQuarterSameDate
+)
+------------------------------------------------------------------
+
+AIO Sale Last Week	
+VAR TodayDate = TODAY()
+
+VAR CurrentWeekStart =
+    TodayDate - WEEKDAY(TodayDate, 2) + 1
+
+VAR LastWeekStart =
+    CurrentWeekStart - 7
+
+VAR DaysPassed =
+    TodayDate - CurrentWeekStart
+
+VAR LastWeekSameDate =
+    LastWeekStart + DaysPassed
+
+RETURN
+CALCULATE(
+    [Total_Sales_All_Platforms],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= LastWeekStart,
+    'Calendar_Table'[Date] <= LastWeekSameDate
+)
+------------------------------------------------------------------
+
+AIO Sale Last Year	
+VAR TodayDate = TODAY()
+
+-- Current FY start
+VAR FYStart =
+    DATE(
+        IF(MONTH(TodayDate) >= 4, YEAR(TodayDate), YEAR(TodayDate) - 1),
+        4, 1
+    )
+
+-- Last FY start
+VAR LastFYStart =
+    DATE(YEAR(FYStart) - 1, 4, 1)
+
+-- Same day last year
+VAR LastYearDate =
+    DATE(YEAR(TodayDate) - 1, MONTH(TodayDate), DAY(TodayDate))
+
+RETURN
+CALCULATE(
+    [Total_Sales_All_Platforms],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= LastFYStart,
+    'Calendar_Table'[Date] <= LastYearDate
+)
+------------------------------------------------------------------
+
+AIO Sale MoM % Diff	
+VAR Curr = [AIO Sale Current Month MTD]
+VAR Prev = [AIO Sale Last Month]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+------------------------------------------------------------------
+
+AIO Sale QoQ % Diff	
+VAR Curr = [AIO Sale Current Quarter QTD]
+VAR Prev = [AIO Sale Last Quarter]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+AIO Sale WoW % Diff	
+VAR Curr = [AIO Sale Current Week]
+VAR Prev = [AIO Sale Last Week]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+------------------------------------------------------------------
+
+AIO Sale YoY % Diff	
+VAR Curr = [AIO Sale Current Year YTD]
+VAR Prev = [AIO Sale Last Year]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+------------------------------------------------------------------
+
+AOV in AIO	
+DIVIDE([Total_Sales_All_Platforms], [Total_Orders_In_AIO])
+------------------------------------------------------------------
+
+AOV in Blinkit	
+DIVIDE([Total_Blinkit_MRP], [Total_Orders In Blinkit])
+------------------------------------------------------------------
+
+AOV in swiggy	
+DIVIDE([Total_Swiggy Sale], [Total_Orders In Swiggy])
+------------------------------------------------------------------
+
+AOV in Zepto	
+DIVIDE([Total_Zepto Sale], [Total_Orders In Zepto])
+------------------------------------------------------------------
+
+Avg Quantity sold order in AIO	[Total_Sales_Qty_All_Platforms]/[Total_Orders_In_AIO]
+------------------------------------------------------------------
+
+Avg Quantity sold order in Blinkit	[Total_Blinkit Quantity]/[Total_Orders In Blinkit]
+------------------------------------------------------------------
+
+Avg Quantity sold order in swiggy	[Total_Swiggy Quantity]/[Total_Orders In Swiggy]
+------------------------------------------------------------------
+
+Avg Quantity sold order in Zepto	[Total_Zepto Quantity]/[Total_Orders In Zepto]
+------------------------------------------------------------------
+
+Blinkit mrp Card_Display_Month	
+VAR SalesValue = [Blinkit MRP Current Month MTD]
+VAR LastMonthValue = [Blinkit MRP Last Month]
+VAR MoM = [Blinkit MRP MoM % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(MoM),
+        "",
+        IF (MoM >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"CM ₹ " & FORMAT(SalesValue, "#,##,##,##,###") &
+" | LM ₹ " & FORMAT(LastMonthValue, "#,##,##,##,###") &
+UNICHAR(10) &
+IF (
+    ISBLANK(MoM),
+    "vs LM NA",
+    "vs LM " & FORMAT(MoM, "0.0%") & Arrow
+)
+------------------------------------------------------------------
+
+Blinkit mrp Card_Display_Quarter	
+VAR SalesValue = [Blinkit MRP Current Quarter QTD]
+VAR LastQuarterValue = [Blinkit MRP Last Quarter]
+VAR QoQ = [Blinkit MRP QoQ % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(QoQ),
+        "",
+        IF (QoQ >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"CQ ₹ " & FORMAT(SalesValue, "#,##,##,##,###") &
+" | LQ ₹ " & FORMAT(LastQuarterValue, "#,##,##,##,###") &
+UNICHAR(10) &
+IF (
+    ISBLANK(QoQ),
+    "vs LQ NA",
+    "vs LQ " & FORMAT(QoQ, "0.0%") & Arrow
+)
+------------------------------------------------------------------
+
+Blinkit mrp Card_Display_Week	
+VAR SalesValue = [Blinkit MRP Current Week]
+VAR LastWeekValue = [Blinkit MRP Last Week]
+VAR WoW = [Blinkit MRP WoW % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(WoW),
+        "",
+        IF (WoW >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"CW ₹" & FORMAT(SalesValue, "#,##0") &
+" | LW ₹" & FORMAT(LastWeekValue, "#,##0") &
+UNICHAR(10) &
+IF (
+    ISBLANK(WoW),
+    "vs LW NA",
+    "vs LW " & FORMAT(WoW, "0.0%") & Arrow
+)
+Blinkit mrp Card_Display_Year	
+VAR SalesValue = [Blinkit MRP Current Year YTD]
+VAR LastYearValue = [Blinkit MRP Last Year]
+VAR YoY = [Blinkit MRP YoY % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(YoY),
+        "",
+        IF (YoY >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"FY ₹ " & FORMAT(SalesValue, "#,##,##,##,###") &
+" | LY ₹ " & FORMAT(LastYearValue, "#,##,##,##,###") &
+UNICHAR(10) &
+IF (
+    ISBLANK(YoY),
+    "vs LY NA",
+    "vs LY " & FORMAT(YoY, "0.0%") & Arrow
+)
+Blinkit MRP Current Month MTD	
+VAR TodayDate = TODAY()
+
+VAR MonthStart =
+    DATE(YEAR(TodayDate), MONTH(TodayDate), 1)
+
+RETURN
+CALCULATE(
+    [Total_Blinkit_MRP],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= MonthStart,
+    'Calendar_Table'[Date] <= TodayDate
+)
+------------------------------------------------------------------
+
+Blinkit MRP Current Quarter QTD	
+VAR TodayDate = TODAY()
+
+-- FY Month (Apr = 1)
+VAR FYMonth =
+    MOD(MONTH(TodayDate) + 8, 12) + 1
+
+-- FY Quarter
+VAR FYQuarter =
+    INT((FYMonth - 1) / 3) + 1
+
+-- Quarter Start Month (Actual month)
+VAR QuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        FYQuarter = 1, 4,
+        FYQuarter = 2, 7,
+        FYQuarter = 3, 10,
+        1
+    )
+
+-- Year adjust (Jan–Mar belongs to next calendar year)
+VAR QuarterYear =
+    IF(QuarterStartMonth = 1, YEAR(TodayDate) + 1, YEAR(TodayDate))
+
+VAR QuarterStart =
+    DATE(QuarterYear, QuarterStartMonth, 1)
+
+RETURN
+CALCULATE(
+    [Total_Blinkit_MRP],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= QuarterStart,
+    'Calendar_Table'[Date] <= TodayDate
+)
+------------------------------------------------------------------
+
+Blinkit MRP Current Week	
+VAR LasDate =
+    MAXX(ALL('Calendar_Table'), 'Calendar_Table'[Date])
+
+VAR WeekStart =
+    LasDate - WEEKDAY(LasDate,2) + 1
+
+RETURN
+CALCULATE(
+    [Total_Blinkit_MRP],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= WeekStart,
+    'Calendar_Table'[Date] <= LasDate
+)
+Blinkit MRP Current Year YTD	
+VAR TodayDate = TODAY()
+
+VAR FYStart =
+    DATE(
+        IF(MONTH(TodayDate) >= 4, YEAR(TodayDate), YEAR(TodayDate) - 1),
+        4, 1
+    )
+
+RETURN
+CALCULATE(
+    [Total_Blinkit_MRP],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= FYStart,
+    'Calendar_Table'[Date] <= TodayDate
+)
+------------------------------------------------------------------
+
+Blinkit MRP Last Month	
+VAR TodayDate = TODAY()
+
+VAR PrevMonthDate =
+    EDATE(TodayDate, -1)
+
+VAR LastMonthStart =
+    DATE(YEAR(PrevMonthDate), MONTH(PrevMonthDate), 1)
+
+VAR LastMonthEnd =
+    EOMONTH(PrevMonthDate, 0)
+
+VAR LastMonthSameDate =
+    MIN(
+        DATE(YEAR(PrevMonthDate), MONTH(PrevMonthDate), DAY(TodayDate)),
+        LastMonthEnd
+    )
+
+RETURN
+CALCULATE(
+    [Total_Blinkit_MRP],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= LastMonthStart,
+    'Calendar_Table'[Date] <= LastMonthSameDate
+)
+------------------------------------------------------------------
+
+Blinkit MRP Last Quarter	
+VAR TodayDate = TODAY()
+
+-- Current FY Month & Quarter
+VAR FYMonth =
+    MOD(MONTH(TodayDate) + 8, 12) + 1
+
+VAR FYQuarter =
+    INT((FYMonth - 1) / 3) + 1
+
+-- Current Quarter Start
+VAR CurrQuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        FYQuarter = 1, 4,
+        FYQuarter = 2, 7,
+        FYQuarter = 3, 10,
+        1
+    )
+
+VAR CurrQuarterYear =
+    IF(CurrQuarterStartMonth = 1, YEAR(TodayDate) + 1, YEAR(TodayDate))
+
+VAR CurrQuarterStart =
+    DATE(CurrQuarterYear, CurrQuarterStartMonth, 1)
+
+-- Previous Quarter
+VAR PrevQuarter =
+    IF(FYQuarter > 1, FYQuarter - 1, 4)
+
+VAR PrevQuarterFY =
+    IF(FYQuarter > 1, YEAR(TodayDate), YEAR(TodayDate) - 1)
+
+VAR PrevQuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        PrevQuarter = 1, 4,
+        PrevQuarter = 2, 7,
+        PrevQuarter = 3, 10,
+        1
+    )
+
+VAR PrevQuarterYear =
+    IF(PrevQuarterStartMonth = 1, PrevQuarterFY + 1, PrevQuarterFY)
+
+VAR PrevQuarterStart =
+    DATE(PrevQuarterYear, PrevQuarterStartMonth, 1)
+
+-- Same period logic
+VAR DaysPassed =
+    TodayDate - CurrQuarterStart
+
+VAR PrevQuarterSameDate =
+    PrevQuarterStart + DaysPassed
+
+RETURN
+CALCULATE(
+    [Total_Blinkit_MRP],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= PrevQuarterStart,
+    'Calendar_Table'[Date] <= PrevQuarterSameDate
+)
+------------------------------------------------------------------
+
+Blinkit MRP Last Week	
+VAR TodayDate = TODAY()
+
+VAR CurrentWeekStart =
+    TodayDate - WEEKDAY(TodayDate, 2) + 1
+
+VAR LastWeekStart =
+    CurrentWeekStart - 7
+
+VAR DaysPassed =
+    TodayDate - CurrentWeekStart
+
+VAR LastWeekSameDate =
+    LastWeekStart + DaysPassed
+
+RETURN
+CALCULATE(
+    [Total_Blinkit_MRP],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= LastWeekStart,
+    'Calendar_Table'[Date] <= LastWeekSameDate
+)
+------------------------------------------------------------------
+
+Blinkit MRP Last Year	
+VAR TodayDate = TODAY()
+
+-- Current FY start
+VAR FYStart =
+    DATE(
+        IF(MONTH(TodayDate) >= 4, YEAR(TodayDate), YEAR(TodayDate) - 1),
+        4, 1
+    )
+
+-- Last FY start
+VAR LastFYStart =
+    DATE(YEAR(FYStart) - 1, 4, 1)
+
+-- Same day last year
+VAR LastYearDate =
+    DATE(YEAR(TodayDate) - 1, MONTH(TodayDate), DAY(TodayDate))
+
+RETURN
+CALCULATE(
+    [Total_Blinkit_MRP],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= LastFYStart,
+    'Calendar_Table'[Date] <= LastYearDate
+)
+------------------------------------------------------------------
+
+Blinkit MRP MoM % Diff	
+VAR Curr = [Blinkit MRP Current Month MTD]
+VAR Prev = [Blinkit MRP Last Month]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+Blinkit MRP QoQ % Diff	
+VAR Curr = [Blinkit MRP Current Quarter QTD]
+VAR Prev = [Blinkit MRP Last Quarter]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+------------------------------------------------------------------
+
+Blinkit MRP WoW % Diff	
+VAR Curr = [Blinkit MRP Current Week]
+VAR Prev = [Blinkit MRP Last Week]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+Blinkit MRP YoY % Diff	
+VAR Curr = [Blinkit MRP Current Year YTD]
+VAR Prev = [Blinkit MRP Last Year]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+------------------------------------------------------------------
+
+Blinkit Purchase Orders	
+DISTINCTCOUNT(Blinkit_PO[po_number])
+Blinkit Purchase Quantity	
+SUM ( 'Blinkit_PO'[units_ordered])
+Blinkit Revenue By Adspend	
+    SUM('Blinkit(Ads_Spend)'[Direct Sales]) + 
+    SUM('Blinkit(Ads_Spend)'[Indirect Sales])
+Blinkit ROAS	
+DIVIDE([Total_Blinkit_MRP],[Total_Blinkit_Ad.Spend])
+Blinkit ROAS By Adspend1	
+DIVIDE(
+    SUM('Blinkit(Ads_Spend)'[Direct Sales]) + 
+    SUM('Blinkit(Ads_Spend)'[Indirect Sales]),
+    [Total_Blinkit_Ad.Spend]
+)
+Blinkit_Fill_Rate	
+DIVIDE([Total_Blinkit_MRP], [Blinkit_Purchase_Amt])
+Blinkit_Gap_%	
+DIVIDE(
+    [Blinkit_PO_vs_Sales_Diff],
+    [Blinkit_Purchase_Amt]
+)
+------------------------------------------------------------------
+
+Blinkit_Gross_P/L(Metrix)	[Total_Blinkit_MRP] - [Blinkit_Purchase_Amt] - [Total_Blinkit_Brand_Fund]
+------------------------------------------------------------------
+
+Blinkit_Gross_P/L_%	DIVIDE([Blinkit_Gross_P/L(Metrix)],[Total_Blinkit_MRP])
+------------------------------------------------------------------
+
+Blinkit_PO_vs_Sales_Diff	
+[Total_Blinkit_MRP] - [Blinkit_Purchase_Amt]
+------------------------------------------------------------------
+
+Blinkit_Purchase_Amt	
+SUM ( 'Blinkit_PO'[total_amount] )
+------------------------------------------------------------------
+
+Blinkit_Real Gross_P/L	
+[Total_Blinkit_MRP]
+- [Blinkit_Purchase_Amt]
+- [Total_Blinkit_Brand_Fund]
+- 'Blinkit AdsSpend/Brandfund_Measure'[Total_Blinkit_Ad.Spend]
+------------------------------------------------------------------
+
+Swiggy Sale Card_Display_Month	
+VAR SalesValue = [Swiggy Sale Current Month MTD]
+VAR LastMonthValue = [Swiggy Sale Last Month]
+VAR MoM = [Swiggy Sale MoM % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(MoM),
+        "",
+        IF (MoM >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"CM ₹ " & FORMAT(SalesValue, "#,##,##,##,###") &
+" | LM ₹ " & FORMAT(LastMonthValue, "#,##,##,##,###") &
+UNICHAR(10) &
+IF (
+    ISBLANK(MoM),
+    "vs LM NA",
+    "vs LM " & FORMAT(MoM, "0.0%") & Arrow
+)
+Swiggy Sale Card_Display_Quarter	
+VAR SalesValue = [Swiggy Sale Current Quarter QTD]
+VAR LastQuarterValue = [Swiggy Sale Last Quarter]
+VAR QoQ = [Swiggy Sale QoQ % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(QoQ),
+        "",
+        IF (QoQ >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"CQ ₹ " & FORMAT(SalesValue, "#,##,##,##,###") &
+" | LQ ₹ " & FORMAT(LastQuarterValue, "#,##,##,##,###") &
+UNICHAR(10) &
+IF (
+    ISBLANK(QoQ),
+    "vs LQ NA",
+    "vs LQ " & FORMAT(QoQ, "0.0%") & Arrow
+)
+------------------------------------------------------------------
+
+Swiggy Sale Card_Display_Week	
+VAR SalesValue = [Swiggy Sale Current Week]
+VAR LastWeekValue = [Swiggy Sale Last Week]
+VAR WoW = [Swiggy Sale WoW % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(WoW),
+        "",
+        IF (WoW >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"CW ₹" & FORMAT(SalesValue, "#,##0") &
+" | LW ₹" & FORMAT(LastWeekValue, "#,##0") &
+UNICHAR(10) &
+IF (
+    ISBLANK(WoW),
+    "vs LW NA",
+    "vs LW " & FORMAT(WoW, "0.0%") & Arrow
+)
+------------------------------------------------------------------
+
+Swiggy Sale Card_Display_Year	
+VAR SalesValue = [Swiggy Sale Current Year YTD]
+VAR LastYearValue = [Swiggy Sale Last Year]
+VAR YoY = [Swiggy Sale YoY % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(YoY),
+        "",
+        IF (YoY >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"FY ₹ " & FORMAT(SalesValue, "#,##,##,##,###") &
+" | LY ₹ " & FORMAT(LastYearValue, "#,##,##,##,###") &
+UNICHAR(10) &
+IF (
+    ISBLANK(YoY),
+    "vs LY NA",
+    "vs LY " & FORMAT(YoY, "0.0%") & Arrow
+)
+
+------------------------------------------------------------------
+
+Swiggy Sale Current Month MTD	
+VAR TodayDate = TODAY()
+
+VAR MonthStart =
+    DATE(YEAR(TodayDate), MONTH(TodayDate), 1)
+
+RETURN
+CALCULATE(
+    [Total_Swiggy Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= MonthStart,
+    'Calendar_Table'[Date] <= TodayDate
+)
+------------------------------------------------------------------
+
+Swiggy Sale Current Quarter QTD	
+VAR TodayDate = TODAY()
+
+-- FY Month (Apr = 1)
+VAR FYMonth =
+    MOD(MONTH(TodayDate) + 8, 12) + 1
+
+-- FY Quarter
+VAR FYQuarter =
+    INT((FYMonth - 1) / 3) + 1
+
+-- Quarter Start Month (Actual month)
+VAR QuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        FYQuarter = 1, 4,
+        FYQuarter = 2, 7,
+        FYQuarter = 3, 10,
+        1
+    )
+
+-- Year adjust (Jan–Mar belongs to next calendar year)
+VAR QuarterYear =
+    IF(QuarterStartMonth = 1, YEAR(TodayDate) + 1, YEAR(TodayDate))
+
+VAR QuarterStart =
+    DATE(QuarterYear, QuarterStartMonth, 1)
+
+RETURN
+CALCULATE(
+    [Total_Swiggy Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= QuarterStart,
+    'Calendar_Table'[Date] <= TodayDate
+)
+------------------------------------------------------------------
+
+Swiggy Sale Current Week	
+VAR LasDate =
+    MAXX(ALL('Calendar_Table'), 'Calendar_Table'[Date])
+
+VAR WeekStart =
+    LasDate - WEEKDAY(LasDate,2) + 1
+
+RETURN
+CALCULATE(
+    [Total_Swiggy Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= WeekStart,
+    'Calendar_Table'[Date] <= LasDate
+)
+------------------------------------------------------------------
+
+Swiggy Sale Current Year YTD	
+VAR TodayDate = TODAY()
+
+VAR FYStart =
+    DATE(
+        IF(MONTH(TodayDate) >= 4, YEAR(TodayDate), YEAR(TodayDate) - 1),
+        4, 1
+    )
+
+RETURN
+CALCULATE(
+    [Total_Swiggy Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= FYStart,
+    'Calendar_Table'[Date] <= TodayDate
+)
+------------------------------------------------------------------
+
+Swiggy Sale Last Month	
+VAR TodayDate = TODAY()
+
+VAR PrevMonthDate =
+    EDATE(TodayDate, -1)
+
+VAR LastMonthStart =
+    DATE(YEAR(PrevMonthDate), MONTH(PrevMonthDate), 1)
+
+VAR LastMonthEnd =
+    EOMONTH(PrevMonthDate, 0)
+
+VAR LastMonthSameDate =
+    MIN(
+        DATE(YEAR(PrevMonthDate), MONTH(PrevMonthDate), DAY(TodayDate)),
+        LastMonthEnd
+    )
+
+RETURN
+CALCULATE(
+    [Total_Swiggy Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= LastMonthStart,
+    'Calendar_Table'[Date] <= LastMonthSameDate
+)
+------------------------------------------------------------------
+
+Swiggy Sale Last Quarter	
+VAR TodayDate = TODAY()
+
+-- Current FY Month & Quarter
+VAR FYMonth =
+    MOD(MONTH(TodayDate) + 8, 12) + 1
+
+VAR FYQuarter =
+    INT((FYMonth - 1) / 3) + 1
+
+-- Current Quarter Start
+VAR CurrQuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        FYQuarter = 1, 4,
+        FYQuarter = 2, 7,
+        FYQuarter = 3, 10,
+        1
+    )
+
+VAR CurrQuarterYear =
+    IF(CurrQuarterStartMonth = 1, YEAR(TodayDate) + 1, YEAR(TodayDate))
+
+VAR CurrQuarterStart =
+    DATE(CurrQuarterYear, CurrQuarterStartMonth, 1)
+
+-- Previous Quarter
+VAR PrevQuarter =
+    IF(FYQuarter > 1, FYQuarter - 1, 4)
+
+VAR PrevQuarterFY =
+    IF(FYQuarter > 1, YEAR(TodayDate), YEAR(TodayDate) - 1)
+
+VAR PrevQuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        PrevQuarter = 1, 4,
+        PrevQuarter = 2, 7,
+        PrevQuarter = 3, 10,
+        1
+    )
+
+VAR PrevQuarterYear =
+    IF(PrevQuarterStartMonth = 1, PrevQuarterFY + 1, PrevQuarterFY)
+
+VAR PrevQuarterStart =
+    DATE(PrevQuarterYear, PrevQuarterStartMonth, 1)
+
+-- Same period logic
+VAR DaysPassed =
+    TodayDate - CurrQuarterStart
+
+VAR PrevQuarterSameDate =
+    PrevQuarterStart + DaysPassed
+
+RETURN
+CALCULATE(
+    [Total_Swiggy Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= PrevQuarterStart,
+    'Calendar_Table'[Date] <= PrevQuarterSameDate
+)
+
+------------------------------------------------------------------
+
+Swiggy Sale Last Week	
+VAR TodayDate = TODAY()
+
+VAR CurrentWeekStart =
+    TodayDate - WEEKDAY(TodayDate, 2) + 1
+
+VAR LastWeekStart =
+    CurrentWeekStart - 7
+
+VAR DaysPassed =
+    TodayDate - CurrentWeekStart
+
+VAR LastWeekSameDate =
+    LastWeekStart + DaysPassed
+
+RETURN
+CALCULATE(
+    [Total_Swiggy Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= LastWeekStart,
+    'Calendar_Table'[Date] <= LastWeekSameDate
+)
+------------------------------------------------------------------
+
+Swiggy Sale Last Year	
+VAR TodayDate = TODAY()
+
+-- Current FY start
+VAR FYStart =
+    DATE(
+        IF(MONTH(TodayDate) >= 4, YEAR(TodayDate), YEAR(TodayDate) - 1),
+        4, 1
+    )
+
+-- Last FY start
+VAR LastFYStart =
+    DATE(YEAR(FYStart) - 1, 4, 1)
+
+-- Same day last year
+VAR LastYearDate =
+    DATE(YEAR(TodayDate) - 1, MONTH(TodayDate), DAY(TodayDate))
+
+RETURN
+CALCULATE(
+    [Total_Swiggy Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= LastFYStart,
+    'Calendar_Table'[Date] <= LastYearDate
+)
+------------------------------------------------------------------
+
+Swiggy Sale MoM % Diff	
+VAR Curr = [Swiggy Sale Current Month MTD]
+VAR Prev = [Swiggy Sale Last Month]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+
+Swiggy Sale QoQ % Diff	
+VAR Curr = [Swiggy Sale Current Quarter QTD]
+VAR Prev = [Swiggy Sale Last Quarter]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+
+------------------------------------------------------------------
+
+Swiggy Sale WoW % Diff	
+VAR Curr = [Swiggy Sale Current Week]
+VAR Prev = [Swiggy Sale Last Week]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+Swiggy Sale YoY % Diff	
+VAR Curr = [Swiggy Sale Current Year YTD]
+VAR Prev = [Swiggy Sale Last Year]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+------------------------------------------------------------------
+
+Total_Ad_Sales_Revenue_Zepto(All_Sponsered)	
+VAR ZeptoAdSalesProductRevenue = SUM('Zepto_Ad_Sponsered_Product'[Revenue])
+VAR ZeptoAdSalesDisplayRevenue = SUM('Zepto_Ad_Sponsered_Display'[Revenue])
+
+RETURN
+ZeptoAdSalesProductRevenue + ZeptoAdSalesDisplayRevenue
+------------------------------------------------------------------
+
+Total_Ad_Sales_Spend_Zepto(All_Sponsered)	
+VAR ZeptoAdSalesProductSpend = SUM('Zepto_Ad_Sponsered_Product'[Spend])
+VAR ZeptoAdSalesDisplaySpend = SUM('Zepto_Ad_Sponsered_Display'[Spend])
+
+RETURN
+ZeptoAdSalesProductSpend + ZeptoAdSalesDisplaySpend
+------------------------------------------------------------------
+
+Total_Blinkit Quantity	
+SUM ( 'Blinkit(Sales)'[qty_sold] )
+Total_Blinkit_Ad.Spend	
+SUMX(
+    'Blinkit(Ads_Spend)',
+    DIVIDE('Blinkit(Ads_Spend)'[Estimated Budget Consumed], 10)
+)
+------------------------------------------------------------------
+
+Total_Blinkit_Brand_Fund	
+SUM ( 'Blinkit(BrandFund)'[total_brand_fund] )
+Total_Blinkit_MRP	
+SUMX(
+    'Blinkit(Sales)',
+    DIVIDE('Blinkit(Sales)'[mrp], 10)
+)
+------------------------------------------------------------------
+
+Total_Orders In Blinkit	
+COUNTROWS('Blinkit(Sales)')
+------------------------------------------------------------------
+
+Total_Orders In Swiggy	
+COUNTROWS('Swiggy(Sales)')
+------------------------------------------------------------------
+
+Total_Orders In Zepto	
+COUNTROWS('Zepto(Sales)')
+------------------------------------------------------------------
+
+Total_Orders_In_AIO	
+COUNTROWS('Blinkit(Sales)') +
+COUNTROWS('Swiggy(Sales)') +
+COUNTROWS('Zepto(Sales)')
+------------------------------------------------------------------
+
+Total_Sales_All_Platforms	
+VAR BlinkitSales = SUM('Blinkit(Sales)'[mrp])
+VAR SwiggySales = SUM('Swiggy(Sales)'[GMV])
+VAR ZeptoSales = SUM('Zepto(Sales)'[Gross Merchandise Value])
+
+RETURN
+BlinkitSales + SwiggySales + ZeptoSales
+------------------------------------------------------------------
+
+Total_Sales_Qty_All_Platforms	
+VAR BlinkitSales = SUM('Blinkit(Sales)'[qty_sold])
+VAR SwiggySales = SUM('Swiggy(Sales)'[UNITS_SOLD])
+VAR ZeptoSales = SUM('Zepto(Sales)'[Sales (Qty) - Units])
+
+RETURN
+BlinkitSales + SwiggySales + ZeptoSales
+------------------------------------------------------------------
+
+Total_Swiggy Quantity	
+SUM ( 'Swiggy(Sales)'[UNITS_SOLD] )
+Total_Swiggy Sale	
+SUMX(
+    'Swiggy(Sales)',
+    DIVIDE('Swiggy(Sales)'[GMV], 10)
+)
+------------------------------------------------------------------
+
+Total_Zepto Ad. Revenue Display	
+SUM ( 'Zepto_Ad_Sponsered_Display'[Revenue] )
+Total_Zepto Ad. Revenue Product	
+SUMX(Zepto_Ad_Sponsered_Product,
+    DIVIDE(Zepto_Ad_Sponsered_Product[Revenue],10)
+)
+
+------------------------------------------------------------------
+
+Total_Zepto Ad. Spend Display	
+SUM ( 'Zepto_Ad_Sponsered_Display'[Spend] )
+------------------------------------------------------------------
+
+Total_Zepto Ad. Spend Product	
+SUM ( 'Zepto_Ad_Sponsered_Product'[Spend] )
+------------------------------------------------------------------
+
+Total_Zepto Quantity	
+SUM ( 'Zepto(Sales)'[Sales (Qty) - Units] )
+------------------------------------------------------------------
+
+Total_Zepto Sale	
+SUMX(
+    'Zepto(Sales)',
+    DIVIDE('Zepto(Sales)'[Gross Merchandise Value], 10)
+)
+Zepto Sale Card_Display_Month	
+VAR SalesValue = [Zepto Sale Current Month MTD]
+VAR LastMonthValue = [Zepto Sale Last Month]
+VAR MoM = [Zepto Sale MoM % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(MoM),
+        "",
+        IF (MoM >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"CM ₹ " & FORMAT(SalesValue, "#,##,##,##,###") &
+" | LM ₹ " & FORMAT(LastMonthValue, "#,##,##,##,###") &
+UNICHAR(10) &
+IF (
+    ISBLANK(MoM),
+    "vs LM NA",
+    "vs LM " & FORMAT(MoM, "0.0%") & Arrow
+)
+
+------------------------------------------------------------------
+
+Zepto Sale Card_Display_Quarter	
+VAR SalesValue = [Zepto Sale Current Quarter QTD]
+VAR LastQuarterValue = [Zepto Sale Last Quarter]
+VAR QoQ = [Zepto Sale QoQ % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(QoQ),
+        "",
+        IF (QoQ >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"CQ ₹ " & FORMAT(SalesValue, "#,##,##,##,###") &
+" | LQ ₹ " & FORMAT(LastQuarterValue, "#,##,##,##,###") &
+UNICHAR(10) &
+IF (
+    ISBLANK(QoQ),
+    "vs LQ NA",
+    "vs LQ " & FORMAT(QoQ, "0.0%") & Arrow
+)
+Zepto Sale Card_Display_Week	
+VAR SalesValue = [Zepto Sale Current Week]
+VAR LastWeekValue = [Zepto Sale Last Week]
+VAR WoW = [Zepto Sale WoW % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(WoW),
+        "",
+        IF (WoW >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"CW ₹" & FORMAT(SalesValue, "#,##0") &
+" | LW ₹" & FORMAT(LastWeekValue, "#,##0") &
+UNICHAR(10) &
+IF (
+    ISBLANK(WoW),
+    "vs LW NA",
+    "vs LW " & FORMAT(WoW, "0.0%") & Arrow
+)
+------------------------------------------------------------------
+
+Zepto Sale Card_Display_Year	
+VAR SalesValue = [Zepto Sale Current Year YTD]
+VAR LastYearValue = [Zepto Sale Last Year]
+VAR YoY = [Zepto Sale YoY % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK(YoY),
+        "",
+        IF (YoY >= 0, " 🟢 ↑", " 🔴 ↓")
+    )
+
+RETURN
+"FY ₹ " & FORMAT(SalesValue, "#,##,##,##,###") &
+" | LY ₹ " & FORMAT(LastYearValue, "#,##,##,##,###") &
+UNICHAR(10) &
+IF (
+    ISBLANK(YoY),
+    "vs LY NA",
+    "vs LY " & FORMAT(YoY, "0.0%") & Arrow
+)
+------------------------------------------------------------------
+
+Zepto Sale Current Month MTD	
+VAR TodayDate = TODAY()
+
+VAR MonthStart =
+    DATE(YEAR(TodayDate), MONTH(TodayDate), 1)
+
+RETURN
+CALCULATE(
+    [Total_Zepto Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= MonthStart,
+    'Calendar_Table'[Date] <= TodayDate
+)
+------------------------------------------------------------------
+
+Zepto Sale Current Quarter QTD	
+VAR TodayDate = TODAY()
+
+-- FY Month (Apr = 1)
+VAR FYMonth =
+    MOD(MONTH(TodayDate) + 8, 12) + 1
+
+-- FY Quarter
+VAR FYQuarter =
+    INT((FYMonth - 1) / 3) + 1
+
+-- Quarter Start Month (Actual month)
+VAR QuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        FYQuarter = 1, 4,
+        FYQuarter = 2, 7,
+        FYQuarter = 3, 10,
+        1
+    )
+
+-- Year adjust (Jan–Mar belongs to next calendar year)
+VAR QuarterYear =
+    IF(QuarterStartMonth = 1, YEAR(TodayDate) + 1, YEAR(TodayDate))
+
+VAR QuarterStart =
+    DATE(QuarterYear, QuarterStartMonth, 1)
+
+RETURN
+CALCULATE(
+    [Total_Zepto Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= QuarterStart,
+    'Calendar_Table'[Date] <= TodayDate
+)
+------------------------------------------------------------------
+
+Zepto Sale Current Week	
+VAR LasDate =
+    MAXX(ALL('Calendar_Table'), 'Calendar_Table'[Date])
+
+VAR WeekStart =
+    LasDate - WEEKDAY(LasDate,2) + 1
+
+RETURN
+CALCULATE(
+    [Total_Zepto Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= WeekStart,
+    'Calendar_Table'[Date] <= LasDate
+)
+------------------------------------------------------------------
+
+Zepto Sale Current Year YTD	
+VAR TodayDate = TODAY()
+
+VAR FYStart =
+    DATE(
+        IF(MONTH(TodayDate) >= 4, YEAR(TodayDate), YEAR(TodayDate) - 1),
+        4, 1
+    )
+
+RETURN
+CALCULATE(
+    [Total_Zepto Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= FYStart,
+    'Calendar_Table'[Date] <= TodayDate
+)
+------------------------------------------------------------------
+
+Zepto Sale Last Month	
+VAR TodayDate = TODAY()
+
+VAR PrevMonthDate =
+    EDATE(TodayDate, -1)
+
+VAR LastMonthStart =
+    DATE(YEAR(PrevMonthDate), MONTH(PrevMonthDate), 1)
+
+VAR LastMonthEnd =
+    EOMONTH(PrevMonthDate, 0)
+
+VAR LastMonthSameDate =
+    MIN(
+        DATE(YEAR(PrevMonthDate), MONTH(PrevMonthDate), DAY(TodayDate)),
+        LastMonthEnd
+    )
+
+RETURN
+CALCULATE(
+    [Total_Zepto Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= LastMonthStart,
+    'Calendar_Table'[Date] <= LastMonthSameDate
+)
+
+------------------------------------------------------------------
+
+Zepto Sale Last Quarter	
+VAR TodayDate = TODAY()
+
+-- Current FY Month & Quarter
+VAR FYMonth =
+    MOD(MONTH(TodayDate) + 8, 12) + 1
+
+VAR FYQuarter =
+    INT((FYMonth - 1) / 3) + 1
+
+-- Current Quarter Start
+VAR CurrQuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        FYQuarter = 1, 4,
+        FYQuarter = 2, 7,
+        FYQuarter = 3, 10,
+        1
+    )
+
+VAR CurrQuarterYear =
+    IF(CurrQuarterStartMonth = 1, YEAR(TodayDate) + 1, YEAR(TodayDate))
+
+VAR CurrQuarterStart =
+    DATE(CurrQuarterYear, CurrQuarterStartMonth, 1)
+
+-- Previous Quarter
+VAR PrevQuarter =
+    IF(FYQuarter > 1, FYQuarter - 1, 4)
+
+VAR PrevQuarterFY =
+    IF(FYQuarter > 1, YEAR(TodayDate), YEAR(TodayDate) - 1)
+
+VAR PrevQuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        PrevQuarter = 1, 4,
+        PrevQuarter = 2, 7,
+        PrevQuarter = 3, 10,
+        1
+    )
+
+VAR PrevQuarterYear =
+    IF(PrevQuarterStartMonth = 1, PrevQuarterFY + 1, PrevQuarterFY)
+
+VAR PrevQuarterStart =
+    DATE(PrevQuarterYear, PrevQuarterStartMonth, 1)
+
+-- Same period logic
+VAR DaysPassed =
+    TodayDate - CurrQuarterStart
+
+VAR PrevQuarterSameDate =
+    PrevQuarterStart + DaysPassed
+
+RETURN
+CALCULATE(
+    [Total_Zepto Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= PrevQuarterStart,
+    'Calendar_Table'[Date] <= PrevQuarterSameDate
+)
+
+------------------------------------------------------------------
+
+Zepto Sale Last Week	
+VAR TodayDate = TODAY()
+
+VAR CurrentWeekStart =
+    TodayDate - WEEKDAY(TodayDate, 2) + 1
+
+VAR LastWeekStart =
+    CurrentWeekStart - 7
+
+VAR DaysPassed =
+    TodayDate - CurrentWeekStart
+
+VAR LastWeekSameDate =
+    LastWeekStart + DaysPassed
+
+RETURN
+CALCULATE(
+    [Total_Zepto Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= LastWeekStart,
+    'Calendar_Table'[Date] <= LastWeekSameDate
+)
+Zepto Sale Last Year	
+VAR TodayDate = TODAY()
+
+-- Current FY start
+VAR FYStart =
+    DATE(
+        IF(MONTH(TodayDate) >= 4, YEAR(TodayDate), YEAR(TodayDate) - 1),
+        4, 1
+    )
+
+-- Last FY start
+VAR LastFYStart =
+    DATE(YEAR(FYStart) - 1, 4, 1)
+
+-- Same day last year
+VAR LastYearDate =
+    DATE(YEAR(TodayDate) - 1, MONTH(TodayDate), DAY(TodayDate))
+
+RETURN
+CALCULATE(
+    [Total_Zepto Sale],
+    ALL('Calendar_Table'),
+    'Calendar_Table'[Date] >= LastFYStart,
+    'Calendar_Table'[Date] <= LastYearDate
+)
+------------------------------------------------------------------
+
+Zepto Sale MoM % Diff	
+VAR Curr = [Zepto Sale Current Month MTD]
+VAR Prev = [Zepto Sale Last Month]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+Zepto Sale QoQ % Diff	
+VAR Curr = [Zepto Sale Current Quarter QTD]
+VAR Prev = [Zepto Sale Last Quarter]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+Zepto Sale WoW % Diff	
+VAR Curr = [Zepto Sale Current Week]
+VAR Prev = [Zepto Sale Last Week]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+Zepto Sale YoY % Diff	
+VAR Curr = [Zepto Sale Current Year YTD]
+VAR Prev = [Zepto Sale Last Year]
+
+RETURN
+IF (
+    NOT ISBLANK(Prev) && Prev <> 0,
+    DIVIDE(Curr - Prev, Prev),
+    BLANK()
+)
+
+------------------------------------------------------------------
+
+Zepto_Display Sp.ROAS	
+DIVIDE(SUM ( 'Zepto_Ad_Sponsered_Display'[Revenue]),SUM(Zepto_Ad_Sponsered_Display[Spend]))
+------------------------------------------------------------------
+
+Zepto_Product + Display Sp.ROAS	
+DIVIDE([Total_Ad_Sales_Revenue_Zepto(All_Sponsered)],[Total_Ad_Sales_Spend_Zepto(All_Sponsered)])
+------------------------------------------------------------------
+
+Zepto_Product Sp.ROAS	
+DIVIDE(SUM ( 'Zepto_Ad_Sponsered_Product'[Revenue] ),SUM(Zepto_Ad_Sponsered_Product[Spend]))
