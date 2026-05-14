@@ -1,0 +1,854 @@
+## Calendar Table
+Calendar_Table = 
+VAR AllDates =
+    UNION (
+        SELECTCOLUMNS (
+            Booking_Sales,
+            "Date", Booking_Sales[A/c. Date]
+        ),
+        SELECTCOLUMNS (
+            Dispatch_Sales,
+            "Date", Dispatch_Sales[A/c.Date]
+        )
+    )
+
+VAR MinDate =
+    MINX ( AllDates, [Date] )
+
+VAR MaxDate =
+    MAXX ( AllDates, [Date] )
+
+RETURN
+ADDCOLUMNS (
+    CALENDAR ( MinDate, MaxDate ),
+
+    /* ---------- Date Keys ---------- */
+    "DateKey", FORMAT ( [Date], "yyyyMMdd" ),
+    "Year", YEAR ( [Date] ),
+    "MonthNumber", MONTH ( [Date] ),
+    "MonthName", FORMAT ( [Date], "MMMM" ),
+    "Day", DAY ( [Date] ),
+
+    /* ---------- Week ---------- */
+    "WeekdayNumber", WEEKDAY ( [Date], 2 ),          -- Monday = 1
+    "WeekdayNameShort", FORMAT ( [Date], "ddd" ),
+    "WeekStart", [Date] - ( WEEKDAY ( [Date], 2 ) - 1 ),
+    "WeekEnd", [Date] - ( WEEKDAY ( [Date], 2 ) - 1 ) + 6,
+    "YearWeek", YEAR ( [Date] ) * 100 + WEEKNUM ( [Date], 2 ),
+
+    /* ---------- Calendar Quarter ---------- */
+    "QuarterNumber", QUARTER ( [Date] ),
+    "QuarterName", "Q" & FORMAT ( QUARTER ( [Date] ), "0" ),
+    "YearQuarter", FORMAT ( [Date], "yyyy" ) & "Q" & QUARTER ( [Date] ),
+
+    /* ========== Financial Year (INDIA) ========== */
+
+    -- Financial Year Number
+    "Financial_Year",
+        IF (
+            MONTH ( [Date] ) >= 4,
+            YEAR ( [Date] ),
+            YEAR ( [Date] ) - 1
+        ),
+
+    -- Financial Year Label (2024-25)
+    "Financial_Year_Label",
+        VAR FY =
+            IF ( MONTH ( [Date] ) >= 4, YEAR ( [Date] ), YEAR ( [Date] ) - 1 )
+        RETURN
+            FORMAT ( FY, "0000" ) & "-" & FORMAT ( FY + 1, "00" ),
+
+    -- Financial Month Number (April = 1 … March = 12)
+    "FY_Month_Number",
+        MOD ( MONTH ( [Date] ) + 8, 12 ) + 1,
+
+    -- Financial Month Name
+    "FY_Month_Name",
+        FORMAT ( [Date], "MMM" ),
+
+    -- Financial Quarter
+    "FY_Quarter",
+        "Q" &
+        SWITCH (
+            TRUE (),
+            MONTH ( [Date] ) IN { 4, 5, 6 }, 1,
+            MONTH ( [Date] ) IN { 7, 8, 9 }, 2,
+            MONTH ( [Date] ) IN { 10, 11, 12 }, 3,
+            4
+        )
+)
+
+
+## unmatched name b/w two table
+Unmatched_Branch = 
+EXCEPT (
+    DISTINCT (
+        SELECTCOLUMNS (
+            Booking_Sales,
+            "Branch", Booking_Sales[Branch]
+        )
+    ),
+    DISTINCT (
+        SELECTCOLUMNS (
+            Branch,
+            "Branch", Branch[Branch]
+        )
+    )
+)
+
+
+
+## unmatched name b/w 3 table
+Unmatched_Product = 
+VAR BookingNames =
+    SELECTCOLUMNS (
+        Booking_Sales,
+        "Not_Found_Product", Booking_Sales[Item Name] 
+    )
+
+VAR DispatchNames =
+    SELECTCOLUMNS (
+        Dispatch_Sales,
+        "Not_Found_Product", Dispatch_Sales[Product Name]
+    )
+
+VAR CombinedNames =
+    DISTINCT (
+        UNION (
+            BookingNames,
+            DispatchNames
+        )
+    )
+
+RETURN
+EXCEPT (
+    CombinedNames,
+    SELECTCOLUMNS (
+        Category,
+        "Not_Found_Product", Category[Product Name]
+    )
+)
+
+
+
+basic measure
+1.
+Total_Booking_Qty (Metric Ton) = 
+SUM ( 'Booking_Sales'[BookingQuantity] ) / 1000
+
+
+2.
+Avg_Booking_Quantity (Metric Ton) = 
+AVERAGE ( 'Booking_Sales'[BookingQuantity] ) / 1000
+
+
+3.
+Booking_Qty Complete Previous Year = 
+VAR TodayDate = TODAY()
+
+-- Previous FY Start Year
+VAR PrevFYStartYear =
+    IF (
+        MONTH ( TodayDate ) >= 4,
+        YEAR ( TodayDate ) - 1,
+        YEAR ( TodayDate ) - 2
+    )
+
+VAR PrevFYStartDate = DATE ( PrevFYStartYear, 4, 1 )
+VAR PrevFYEndDate   = DATE ( PrevFYStartYear + 1, 3, 31 )
+
+RETURN
+CALCULATE (
+    [Total_Booking_Qty (Metric Ton)],
+    FILTER (
+        ALL ( 'Calendar_Table'[Date] ),
+        'Calendar_Table'[Date] >= PrevFYStartDate
+            && 'Calendar_Table'[Date] <= PrevFYEndDate
+    )
+)
+
+
+4.
+Booking_Qty Current Month MTD = 
+VAR TodayDate = TODAY()
+VAR MonthStart =
+    DATE ( YEAR ( TodayDate ), MONTH ( TodayDate ), 1 )
+RETURN
+CALCULATE (
+    [Total_Booking_Qty (Metric Ton)],
+    ALL ( 'Calendar_Table'[Date] ),
+    'Calendar_Table'[Date] >= MonthStart,
+    'Calendar_Table'[Date] <= TodayDate
+)
+
+5.
+Booking_Qty Current Week WTD(Card_Visual) = 
+VAR LastAvailableDate =
+    CALCULATE (
+        MAX ( 'Calendar_Table'[Date] ),
+        ALL ( 'Calendar_Table' ),
+        'Calendar_Table'[Date] <= TODAY()
+    )
+
+VAR WeekStart =
+    LastAvailableDate - ( WEEKDAY ( LastAvailableDate, 2 ) - 1 )
+
+RETURN
+CALCULATE (
+    [Total_Booking_Qty (Metric Ton)],
+    FILTER (
+        ALL ( 'Calendar_Table'[Date] ),
+        'Calendar_Table'[Date] >= WeekStart
+            && 'Calendar_Table'[Date] <= LastAvailableDate
+    )
+)
+
+
+
+6.
+Booking_Qty Last Completed Month = 
+VAR TodayDate = TODAY()
+
+-- Last month start (1 Feb)
+VAR LastMonthStart =
+    EOMONTH ( TodayDate, -2 ) + 1
+
+-- Last month end (28 Feb)
+VAR LastMonthEnd =
+    EOMONTH ( TodayDate, -1 )
+
+RETURN
+CALCULATE(
+    [Total_Booking_Qty (Metric Ton)],
+    FILTER(
+        ALL('Calendar_Table'[Date]),
+        'Calendar_Table'[Date] >= LastMonthStart
+            && 'Calendar_Table'[Date] <= LastMonthEnd
+    )
+)
+
+7.
+Booking_Qty Last Completed Month Text = 
+VAR Vlu = [Booking_Qty Last Completed Month]
+
+RETURN
+FORMAT ( Vlu, "#,##,##,##,###" )
+
+
+
+
+8.
+Booking_Qty Last Completed Week = 
+VAR TodayDate = TODAY()
+
+-- Current week ka Monday
+VAR CurrentWeekStart =
+    TodayDate - WEEKDAY(TodayDate, 2) + 1
+
+-- Last completed week (Monday)
+VAR LastWeekStart =
+    CurrentWeekStart - 7
+
+-- Last completed week (Sunday)
+VAR LastWeekEnd =
+    CurrentWeekStart - 1
+
+RETURN
+CALCULATE(
+    [Total_Booking_Qty (Metric Ton)],
+    FILTER(
+        ALL('Calendar_Table'[Date]),
+        'Calendar_Table'[Date] >= LastWeekStart &&
+        'Calendar_Table'[Date] <= LastWeekEnd
+    )
+)
+
+
+9.
+Booking_Qty Last Month = 
+VAR TodayDate = TODAY()
+
+-- Last Month Start
+VAR LastMonthStart =
+    DATE(YEAR(TodayDate), MONTH(TodayDate) - 1, 1)
+
+-- Last Month End (same day)
+VAR LastMonthEnd =
+    MIN(
+        DATE(YEAR(TodayDate), MONTH(TodayDate) - 1, DAY(TodayDate)),
+        EOMONTH(TodayDate, -1)
+    )
+
+RETURN
+CALCULATE(
+    [Total_Booking_Qty (Metric Ton)],
+    FILTER(
+        ALL('Calendar_Table'[Date]),
+        'Calendar_Table'[Date] >= LastMonthStart
+            && 'Calendar_Table'[Date] <= LastMonthEnd
+    )
+)
+
+10.
+Booking_Qty Last Week (Same Period) = 
+
+VAR TodayDate = TODAY()
+
+-- Current week start (Monday)
+VAR CurrentWeekStart =
+    TodayDate - (WEEKDAY(TodayDate, 2) - 1)
+
+-- Previous week start
+VAR LastWeekStart =
+    CurrentWeekStart - 7
+
+-- Days passed in current week
+VAR DaysPassed =
+    TodayDate - CurrentWeekStart
+
+-- Same day last week
+VAR LastWeekEnd =
+    LastWeekStart + DaysPassed
+
+RETURN
+CALCULATE(
+    [Total_Booking_Qty (Metric Ton)],
+    FILTER(
+        ALL('Calendar_Table'[Date]),
+        'Calendar_Table'[Date] >= LastWeekStart
+            && 'Calendar_Table'[Date] <= LastWeekEnd
+    )
+)
+
+
+11.
+Booking_Qty MoM % Diff = 
+VAR Curr = 'Booking Measure'[Booking_Qty Current Month MTD]
+VAR Prev = 'Booking Measure'[Booking_Qty Last Month]
+RETURN
+IF (
+    NOT ISBLANK ( Prev ) && Prev <> 0,
+    DIVIDE ( Curr - Prev, Prev ),
+    BLANK ()
+)
+
+
+12.
+Booking_Qty MTD Diff = 
+'Booking Measure'[Booking_Qty Current Month MTD] - 'Booking Measure'[Booking_Qty Last Month]
+
+13.
+Booking_Qty Previous Week = 
+VAR LastAvailableDate =
+    CALCULATE (
+        MAX ( 'Calendar_Table'[Date] ),
+        ALL ( 'Calendar_Table' ),
+        'Calendar_Table'[Date] <= TODAY()
+    )
+
+-- Last available date ka week ka Monday
+VAR ThisWeekStart =
+    LastAvailableDate - ( WEEKDAY ( LastAvailableDate, 2 ) - 1 )
+
+-- Last FULL completed week (Mon–Sun)
+VAR LastWeekStart =
+    ThisWeekStart - 7
+VAR LastWeekEnd =
+    ThisWeekStart - 1
+
+RETURN
+CALCULATE (
+    [Total_Booking_Qty (Metric Ton)],
+    FILTER (
+        ALL ( 'Calendar_Table'[Date] ),
+        'Calendar_Table'[Date] >= LastWeekStart
+            && 'Calendar_Table'[Date] <= LastWeekEnd
+    )
+)
+
+
+14.
+Booking_Qty Previous Year = 
+VAR TodayDate = TODAY()
+
+-- Current FY Start
+VAR CurrFYStartYear =
+    IF ( MONTH ( TodayDate ) >= 4,
+        YEAR ( TodayDate ),
+        YEAR ( TodayDate ) - 1
+    )
+
+VAR CurrFYStartDate = DATE ( CurrFYStartYear, 4, 1 )
+
+-- Days passed in current FY
+VAR DaysPassed =
+    TodayDate - CurrFYStartDate
+
+-- Previous FY Start
+VAR PrevFYStartDate = DATE ( CurrFYStartYear - 1, 4, 1 )
+
+-- Previous FY Same Date
+VAR PrevFYSameDate =
+    PrevFYStartDate + DaysPassed
+
+RETURN
+CALCULATE (
+    [Total_Booking_Qty (Metric Ton)],
+    FILTER (
+        ALL ( 'Calendar_Table'[Date] ),
+        'Calendar_Table'[Date] >= PrevFYStartDate
+            && 'Calendar_Table'[Date] <= PrevFYSameDate
+    )
+)
+
+
+15.
+Booking_Qty QTD = 
+VAR TodayDate = TODAY()
+
+-- Financial Year start year
+VAR FYStartYear =
+    IF ( MONTH ( TodayDate ) >= 4,
+        YEAR ( TodayDate ),
+        YEAR ( TodayDate ) - 1
+    )
+
+-- Financial month number (Apr = 1 … Mar = 12)
+VAR FYMonth =
+    MOD ( MONTH ( TodayDate ) + 8, 12 ) + 1
+
+-- Financial Quarter number
+VAR FYQuarter =
+    INT ( ( FYMonth - 1 ) / 3 ) + 1
+
+-- First FY month of the quarter
+VAR FirstFYMonth =
+    ( FYQuarter - 1 ) * 3 + 1
+
+-- Convert FY month → calendar month
+VAR FirstCalendarMonth =
+    MOD ( FirstFYMonth + 2, 12 ) + 1
+
+-- Calendar year of quarter start
+VAR QuarterStartYear =
+    IF ( FirstCalendarMonth >= 4, FYStartYear, FYStartYear + 1 )
+
+VAR QuarterStartDate =
+    DATE ( QuarterStartYear, FirstCalendarMonth, 1 )
+
+RETURN
+CALCULATE (
+    [Total_Booking_Qty (Metric Ton)],
+    FILTER (
+        ALL ( 'Calendar_Table'[Date] ),
+        'Calendar_Table'[Date] >= QuarterStartDate
+            && 'Calendar_Table'[Date] <= TodayDate
+    )
+)
+
+
+16.
+Booking_Qty QTD Previous Text = 
+VAR TodayDate = TODAY()
+
+-- Financial Year
+VAR FY =
+    IF ( MONTH ( TodayDate ) >= 4,
+        YEAR ( TodayDate ),
+        YEAR ( TodayDate ) - 1
+    )
+
+-- Financial Month & Quarter
+VAR FYMonth =
+    MOD ( MONTH ( TodayDate ) + 8, 12 ) + 1
+
+VAR FYQuarter =
+    INT ( ( FYMonth - 1 ) / 3 ) + 1
+
+-- Previous FY Quarter
+VAR PrevFYQuarter =
+    IF ( FYQuarter > 1, FYQuarter - 1, 4 )
+
+VAR PrevFY =
+    IF ( FYQuarter > 1, FY, FY - 1 )
+
+-- First month of previous FY quarter (FY month number)
+VAR PrevFirstFYMonth =
+    ( PrevFYQuarter - 1 ) * 3 + 1
+
+-- Convert FY month → calendar month
+VAR PrevCalendarMonth =
+    MOD ( PrevFirstFYMonth + 2, 12 ) + 1
+
+-- Calendar year of previous quarter start
+VAR PrevQuarterStartYear =
+    IF ( PrevCalendarMonth >= 4, PrevFY, PrevFY + 1 )
+
+VAR PrevQuarterStart =
+    DATE ( PrevQuarterStartYear, PrevCalendarMonth, 1 )
+
+VAR PrevQuarterEnd =
+    EOMONTH ( PrevQuarterStart, 2 )
+
+VAR Vlu =
+    CALCULATE (
+        [Total_Booking_Qty (Metric Ton)],
+        FILTER (
+            ALL ( 'Calendar_Table'[Date] ),
+            'Calendar_Table'[Date] >= PrevQuarterStart
+                && 'Calendar_Table'[Date] <= PrevQuarterEnd
+        )
+    )
+
+RETURN
+IF (
+    ISBLANK ( Vlu ) || Vlu = 0,
+    "-",
+    " " & FORMAT ( Vlu, "#,##,##,##,###" )
+)
+
+
+
+17.
+Booking_Qty WoW % Diff = 
+VAR Curr =
+    'Booking Measure'[Booking_Qty Current Week WTD(Card_Visual)]
+VAR Prev =
+    'Booking Measure'[Booking_Qty Last Week (Same Period)]
+
+RETURN
+IF (
+    NOT ISBLANK ( Prev ) && Prev <> 0,
+    DIVIDE ( Curr - Prev, Prev ),
+    BLANK ()
+)
+
+
+
+
+18.
+Booking_Qty WTD % Diff = 
+VAR Curr = [Current Week Booking Qty]
+VAR Prev = 'Booking Measure'[Booking_Qty Last Week (Same Period)]
+RETURN
+IF (
+    NOT ISBLANK ( Prev ) && Prev <> 0,
+    DIVIDE ( Curr - Prev, Prev ),
+    BLANK ()
+)
+
+
+19.
+Booking_Qty WTD Diff = 
+[Current Week Booking Qty] - 'Booking Measure'[Booking_Qty Last Week (Same Period)]
+
+
+20.
+Booking_Qty YTD = 
+VAR TodayDate = TODAY()
+VAR FYStartYear =
+    IF ( MONTH ( TodayDate ) >= 4,
+        YEAR ( TodayDate ),
+        YEAR ( TodayDate ) - 1
+    )
+VAR FYStartDate = DATE ( FYStartYear, 4, 1 )
+
+RETURN
+CALCULATE (
+    [Total_Booking_Qty (Metric Ton)],
+    FILTER (
+        ALL ( 'Calendar_Table'[Date] ),
+        'Calendar_Table'[Date] >= FYStartDate
+            && 'Calendar_Table'[Date] <= TodayDate
+    )
+)
+
+
+21.
+Booking_Qty YTD % Diff = 
+VAR Curr = [Booking_Qty YTD]
+VAR Prev = [Booking_Qty Previous Year]
+RETURN
+IF (
+    NOT ISBLANK ( Prev ) && Prev <> 0,
+    DIVIDE ( Curr - Prev, Prev ),
+    BLANK ()
+)
+
+
+22.
+Booking_Qty YTD Diff = 'Booking Measure'[Booking_Qty YTD] - 'Booking Measure'[Booking_Qty Previous Year]
+
+
+23.
+Booking_Qty YTD Previous Year Text = 
+VAR Vlu = 'Booking Measure'[Booking_Qty Previous Year]
+RETURN
+" " & FORMAT ( Vlu, "#,##,##,##,###" )
+
+
+24.
+Booking_Qty_Card_Display_Month = 
+VAR CurrentMonthSales = 'Booking Measure'[Booking_Qty Current Month MTD]
+VAR PrevMonthSales = 'Booking Measure'[Booking_Qty Last Month]
+VAR MoM = 'Booking Measure'[Booking_Qty MoM % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK ( MoM ),
+        "",
+        IF ( MoM >= 0, "🟢 ↑", "🔴 ↓" )
+    )
+
+RETURN
+"CM " & FORMAT ( CurrentMonthSales, "#,##0" ) &
+" vs LM " & FORMAT ( PrevMonthSales, "#,##0" ) &
+UNICHAR(10) &
+IF (
+    ISBLANK ( MoM ),
+    "NA",
+    FORMAT ( MoM, "0.0%" ) & " " & Arrow
+)
+
+
+25.
+Booking_Qty_Card_Display_Quarter = 
+VAR TodayDate = TODAY()
+
+-- Financial Year
+VAR FY =
+    IF ( MONTH ( TodayDate ) >= 4,
+        YEAR ( TodayDate ),
+        YEAR ( TodayDate ) - 1
+    )
+
+-- Financial Month & Quarter
+VAR FYMonth = MOD ( MONTH ( TodayDate ) + 8, 12 ) + 1
+VAR FYQuarter = INT ( ( FYMonth - 1 ) / 3 ) + 1
+VAR QuarterLabel = "Q" & FYQuarter
+
+-- Current QTD
+VAR CurrentQuarterSales = [Booking_Qty QTD]
+
+-- Current Quarter Start
+VAR CurrQuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        FYQuarter = 1, 4,
+        FYQuarter = 2, 7,
+        FYQuarter = 3, 10,
+        1
+    )
+
+VAR CurrQuarterYear =
+    IF ( CurrQuarterStartMonth = 1, FY + 1, FY )
+
+VAR CurrQuarterStart =
+    DATE ( CurrQuarterYear, CurrQuarterStartMonth, 1 )
+
+-- Previous Quarter (Same FY)
+VAR PrevQuarter =
+    IF ( FYQuarter > 1, FYQuarter - 1, 4 )
+
+VAR PrevQuarterFY =
+    IF ( FYQuarter > 1, FY, FY - 1 )
+
+VAR PrevQuarterStartMonth =
+    SWITCH(
+        TRUE(),
+        PrevQuarter = 1, 4,
+        PrevQuarter = 2, 7,
+        PrevQuarter = 3, 10,
+        1
+    )
+
+VAR PrevQuarterYear =
+    IF ( PrevQuarterStartMonth = 1, PrevQuarterFY + 1, PrevQuarterFY )
+
+VAR PrevQuarterStart =
+    DATE ( PrevQuarterYear, PrevQuarterStartMonth, 1 )
+
+-- SAME PERIOD
+VAR PrevQuarterSameDate =
+    DATE(
+        YEAR(PrevQuarterStart),
+        MONTH(PrevQuarterStart) + (MONTH(TodayDate) - MONTH(CurrQuarterStart)),
+        DAY(TodayDate)
+    )
+
+VAR PrevQuarterEnd =
+    MIN(PrevQuarterSameDate, EOMONTH(PrevQuarterStart, 2))
+
+VAR PrevQuarterSales =
+    CALCULATE (
+        [Total_Booking_Qty (Metric Ton)],
+        FILTER (
+            ALL ( 'Calendar_Table'[Date] ),
+            'Calendar_Table'[Date] >= PrevQuarterStart
+                && 'Calendar_Table'[Date] <= PrevQuarterEnd
+        )
+    )
+
+-- % Diff
+VAR PctDiff =
+    DIVIDE ( CurrentQuarterSales - PrevQuarterSales, PrevQuarterSales )
+
+VAR Arrow =
+    IF ( PctDiff >= 0, "🟢 ↑", "🔴 ↓" )
+
+RETURN
+"FY(" & QuarterLabel & ") " &
+FORMAT ( CurrentQuarterSales, "#,##,##,##,###" ) &
+" vs FY(Q" & PrevQuarter & ") " &
+FORMAT ( PrevQuarterSales, "#,##,##,##,###" ) &
+UNICHAR(10) &
+FORMAT ( PctDiff, "0.0%" ) & " " & Arrow
+
+
+
+26.
+Booking_Qty_Card_Display_Week = 
+VAR CurrentWeekSales =
+    'Booking Measure'[Booking_Qty Current Week WTD(Card_Visual)]
+
+VAR PrevWeekSales =
+    'Booking Measure'[Booking_Qty Last Week (Same Period)]
+
+VAR WoW =
+    'Booking Measure'[Booking_Qty WoW % Diff]
+
+VAR Arrow =
+    IF (
+        ISBLANK ( WoW ),
+        "",
+        IF ( WoW >= 0, "🟢 ↑", "🔴 ↓" )
+    )
+
+RETURN
+"CW " & FORMAT ( CurrentWeekSales, "#,##0" ) &
+" vs LW " & FORMAT ( PrevWeekSales, "#,##0" ) &
+UNICHAR(10) &
+IF (
+    ISBLANK ( WoW ),
+    "NA",
+    FORMAT ( WoW, "0.0%" ) & " " & Arrow
+)
+
+
+
+27.
+Booking_Qty_Card_Display_Year = 
+VAR CurrentYearSales = [Booking_Qty YTD]
+VAR PrevYearSales = [Booking_Qty Previous Year]
+VAR YoY = [Booking_Qty YTD % Diff]
+
+VAR Arrow =
+    IF ( YoY >= 0, "🟢 ↑", "🔴 ↓" )
+
+RETURN
+"FY " & FORMAT(CurrentYearSales, "#,##,##,##,###") &
+" vs LY " & FORMAT(PrevYearSales, "#,##,##,##,###") &
+UNICHAR(10) &
+FORMAT(YoY, "0.0%") & " " & Arrow
+
+
+28.
+Booking_Qty_SelectedRange = 
+CALCULATE (
+    [Total_Booking_Qty (Metric Ton)],
+    ALLSELECTED ( Calendar_Table[Financial_Year] )
+)
+
+
+29.
+Booking_Qty_Sold = 
+" " & FORMAT ( [Booking_Qty_SelectedRange], "#,##,##,##,###" )
+
+
+
+30.
+Booking_Running_Ticker = 
+VAR MonthText =
+    [Booking_Qty_Card_Display_Month]
+
+VAR QuarterText =
+    [Booking_Qty_Card_Display_Quarter]
+
+VAR YearText =
+    [Booking_Qty_Card_Display_Year]
+
+RETURN
+"
+<div style='
+    width:100%;
+    overflow:hidden;
+    white-space:nowrap;
+    background:#111;
+    color:white;
+    font-size:18px;
+    font-family:Segoe UI;
+    padding:10px;
+    border-radius:6px;
+'>
+    <marquee scrollamount='6' behavior='scroll' direction='left'>
+        🔥 Booking Quantity Update &nbsp;&nbsp; | &nbsp;&nbsp;
+        📌 Month: " & MonthText & "
+        &nbsp;&nbsp; | &nbsp;&nbsp;
+        📊 Quarter: " & QuarterText & "
+        &nbsp;&nbsp; | &nbsp;&nbsp;
+        🏆 Year: " & YearText & "
+        &nbsp;&nbsp; | &nbsp;&nbsp;
+    </marquee>
+</div>
+"
+
+
+
+
+31.
+Current Week Booking Qty = 
+VAR TodayDate =
+    CALCULATE (
+        MAX ( 'Calendar_Table'[Date] ),
+        ALL ( 'Calendar_Table' ),
+        'Calendar_Table'[Date] <= TODAY()
+    )
+
+VAR WeekStart =
+    TodayDate - ( WEEKDAY ( TodayDate, 2 ) - 1 )
+
+VAR WeekDayNum =
+    SELECTEDVALUE ( 'Calendar_Table'[WeekdayNumber] )
+
+VAR ColumnDate =
+    WeekStart + WeekDayNum - 1
+
+RETURN
+IF (
+    -- 🔹 DAY COLUMNS (Mon–Sun)
+    ISINSCOPE ( 'Calendar_Table'[WeekdayNameShort] ),
+
+    IF (
+        ColumnDate > TodayDate,
+        BLANK(),
+        CALCULATE (
+            SUM ( 'Booking_Sales'[BookingQuantity] ) / 1000,
+            ALL ( 'Calendar_Table'[Date] ),
+            'Calendar_Table'[Date] = ColumnDate
+        )
+    ),
+
+    -- 🔹 ROW TOTAL (Mon → Today)
+    CALCULATE (
+        SUM ( 'Booking_Sales'[BookingQuantity] ) / 1000,
+        FILTER (
+            ALL ( 'Calendar_Table'[Date] ),
+            'Calendar_Table'[Date] >= WeekStart
+                && 'Calendar_Table'[Date] <= TodayDate
+        )
+    )
+)
+
+
+
+32.
